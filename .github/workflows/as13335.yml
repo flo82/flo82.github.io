@@ -1,0 +1,29 @@
+name: Update Cloudflare AS13335 List
+on:
+  schedule:
+    - cron: '0 0 * * *' # Täglich um Mitternacht
+  workflow_dispatch: # Erlaubt manuelles Starten
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install Tools
+        run: sudo apt-get install -y whois aggregate
+
+      - name: Generate and Aggregate List
+        run: |
+          whois -h whois.radb.net -- '-i origin AS13335' | grep -E '^route:' | awk '{print $2}' | sort -u | aggregate > cf_as13335_ipv4.txt
+          whois -h whois.radb.net -- '-i origin AS13335' | grep -E '^route6:' | awk '{print $2}' | sort -u | aggregate >> cf_as13335_ipv6.txt
+
+      - name: Commit and Push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add cf_as13335_ipv4.txt
+          git add cf_as13335_ipv6.txt
+          git commit -m "Update Cloudflare IP list" || exit 0
+          git push
