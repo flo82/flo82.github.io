@@ -1,8 +1,11 @@
-name: Update Cloudflare AS13335 List
+name: Update Cloudflare AS13335 Lists
 on:
   schedule:
-    - cron: '0 0 * * *' # Täglich um Mitternacht
-  workflow_dispatch: # Erlaubt manuelles Starten
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -12,18 +15,27 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Tools
-        run: sudo apt-get install -y whois aggregate
-
-      - name: Generate and Aggregate List
         run: |
+          sudo apt-get update
+          sudo apt-get install -y whois aggregate python3-pip
+          pip3 install aggregate6 --break-system-packages
+
+      - name: Generate and Aggregate Lists
+        run: |
+          # IPv4 Liste erstellen
           whois -h whois.radb.net -- '-i origin AS13335' | grep -E '^route:' | awk '{print $2}' | sort -u | aggregate > cf_as13335_ipv4.txt
-          whois -h whois.radb.net -- '-i origin AS13335' | grep -E '^route6:' | awk '{print $2}' | sort -u | aggregate >> cf_as13335_ipv6.txt
+          
+          # IPv6 Liste erstellen (mit aggregate6 für die 3000+ Zeilen)
+          whois -h whois.radb.net -- '-i origin AS13335' | grep -E '^route6:' | awk '{print $2}' | sort -u | aggregate6 > cf_as13335_ipv6.txt
+          
+          # Kontrolle der Zeilenanzahl im Log
+          echo "IPv4 Zeilen: $(wc -l < cf_as13335_ipv4.txt)"
+          echo "IPv6 Zeilen: $(wc -l < cf_as13335_ipv6.txt)"
 
       - name: Commit and Push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add cf_as13335_ipv4.txt
-          git add cf_as13335_ipv6.txt
-          git commit -m "Update Cloudflare IP list" || exit 0
+          git add cf_as13335_ipv4.txt cf_as13335_ipv6.txt
+          git commit -m "Update Cloudflare IPv4 and IPv6 lists" || exit 0
           git push
